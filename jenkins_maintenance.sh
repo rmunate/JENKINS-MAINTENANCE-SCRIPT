@@ -32,11 +32,13 @@ MAX_BACKUPS="${MAX_BACKUPS:-1}"  # Mantener solo el backup más reciente
 log_message() {
     local level=$1
     shift
-    local message="$@"
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    local message="$*"
+    local timestamp
+    timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     
     # Asegurar que el directorio de log existe y es escribible
-    local log_dir=$(dirname "$LOG_FILE")
+    local log_dir
+    log_dir=$(dirname "$LOG_FILE")
     if [[ ! -d "$log_dir" ]]; then
         mkdir -p "$log_dir" 2>/dev/null || LOG_FILE="/tmp/jenkins_maintenance.log"
     fi
@@ -49,23 +51,23 @@ log_message() {
 }
 
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $@"
-    log_message "INFO" "$@"
+    echo -e "${BLUE}[INFO]${NC} $*"
+    log_message "INFO" "$*"
 }
 
 log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $@"
-    log_message "SUCCESS" "$@"
+    echo -e "${GREEN}[SUCCESS]${NC} $*"
+    log_message "SUCCESS" "$*"
 }
 
 log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $@"
-    log_message "WARNING" "$@"
+    echo -e "${YELLOW}[WARNING]${NC} $*"
+    log_message "WARNING" "$*"
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $@"
-    log_message "ERROR" "$@"
+    echo -e "${RED}[ERROR]${NC} $*"
+    log_message "ERROR" "$*"
 }
 
 check_root() {
@@ -87,7 +89,8 @@ check_system_status() {
     df -h | grep -E "^Filesystem|/$|${JENKINS_HOME}" | tee -a "$LOG_FILE"
     
     # Verificar espacio disponible (mínimo 10% libre)
-    local disk_usage=$(df -h / | awk 'NR==2 {print $5}' | sed 's/%//')
+    local disk_usage
+    disk_usage=$(df -h / | awk 'NR==2 {print $5}' | sed 's/%//')
     if [[ $disk_usage -gt 90 ]]; then
         log_warning "Espacio en disco bajo: ${disk_usage}% usado"
     else
@@ -159,7 +162,8 @@ backup_jenkins_config() {
     fi
     
     # Nombre del backup con timestamp
-    local timestamp=$(date '+%Y%m%d_%H%M%S')
+    local timestamp
+    timestamp=$(date '+%Y%m%d_%H%M%S')
     local backup_file="${BACKUP_DIR}/jenkins_backup_${timestamp}.tar.gz"
     
     log_info "Creando backup en: $backup_file"
@@ -191,7 +195,8 @@ backup_jenkins_config() {
         log_success "Backup creado exitosamente: $backup_file"
         
         # Mostrar tamaño del backup
-        local size=$(du -h "$backup_file" | cut -f1)
+        local size
+        size=$(du -h "$backup_file" | cut -f1)
         log_info "Tamaño del backup: $size"
         
         return 0
@@ -209,7 +214,8 @@ manage_backups() {
     log_info "=== Gestionando backups antiguos ==="
     
     # Contar backups existentes
-    local backup_count=$(ls -1 "${BACKUP_DIR}"/jenkins_backup_*.tar.gz 2>/dev/null | wc -l)
+    local backup_count
+    backup_count=$(ls -1 "${BACKUP_DIR}"/jenkins_backup_*.tar.gz 2>/dev/null | wc -l)
     log_info "Backups encontrados: $backup_count"
     
     if [[ $backup_count -gt $MAX_BACKUPS ]]; then
@@ -255,7 +261,8 @@ cleanup_temp_files() {
     # Limpiar archivos temporales
     if [[ -d "${JENKINS_HOME}/war" ]]; then
         log_info "Limpiando archivos war temporales..."
-        local size_before=$(du -sh "${JENKINS_HOME}/war" 2>/dev/null | cut -f1)
+        local size_before
+        size_before=$(du -sh "${JENKINS_HOME}/war" 2>/dev/null | cut -f1)
         rm -rf "${JENKINS_HOME}/war"/*
         log_success "Archivos war limpiados (antes: $size_before)"
         cleaned=1
