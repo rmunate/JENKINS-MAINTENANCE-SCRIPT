@@ -1,0 +1,19 @@
+# Archivos de log
+*.log
+
+# Archivos temporales
+*.tmp
+*.bak
+*.swp
+*~
+
+# Archivos de backup de prueba
+jenkins_backup_*.tar.gz
+
+# Directorios de sistema
+.DS_Store
+Thumbs.db
+
+# Variables de entorno locales
+.env
+.env.local
