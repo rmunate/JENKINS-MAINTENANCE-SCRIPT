@@ -173,4 +173,4 @@ fi
 
 6. **Documenta tu configuración**: Mantén un registro de las variables personalizadas que usas.
 
-7. **Prueba la restauración**: Periodicamente verifica que puedes restaurar desde los backups.
+7. **Prueba la restauración**: Periódicamente verifica que puedes restaurar desde los backups.

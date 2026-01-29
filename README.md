@@ -28,7 +28,12 @@ chmod +x jenkins_maintenance.sh
 
 3. (Opcional) Personalizar la configuración:
 ```bash
+# Editar el archivo de configuración
 nano jenkins_maintenance.conf
+
+# Cargar la configuración antes de ejecutar
+source jenkins_maintenance.conf
+sudo -E ./jenkins_maintenance.sh
 ```
 
 ## 📖 Uso
@@ -54,6 +59,10 @@ sudo JENKINS_HOME=/opt/jenkins BACKUP_DIR=/backup/jenkins ./jenkins_maintenance.
 - `JENKINS_HOME`: Ruta del directorio home de Jenkins (default: `/var/lib/jenkins`)
 - `BACKUP_DIR`: Directorio donde se almacenarán los backups (default: `/var/backups/jenkins`)
 - `JENKINS_SERVICE`: Nombre del servicio Jenkins (default: `jenkins`)
+- `LOG_FILE`: Ruta del archivo de log (default: `/var/log/jenkins_maintenance.log`)
+- `MAX_BACKUPS`: Número máximo de backups a mantener (default: `1`)
+- `CLEANUP_WORKSPACES`: Si es `true`, elimina workspaces (default: `false`, **PRECAUCIÓN**)
+- `SKIP_BACKUP_ON_ERROR`: Si es `true`, continúa sin backup en caso de error (default: `false`, **NO RECOMENDADO**)
 
 ## 📝 Funcionalidades Detalladas
 

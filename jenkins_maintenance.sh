@@ -18,12 +18,12 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # Sin color
 
-# Variables de configuración
+# Variables de configuración (pueden ser sobrescritas por variables de entorno)
 JENKINS_HOME="${JENKINS_HOME:-/var/lib/jenkins}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/jenkins}"
 JENKINS_SERVICE="${JENKINS_SERVICE:-jenkins}"
-LOG_FILE="/var/log/jenkins_maintenance.log"
-MAX_BACKUPS=1  # Mantener solo el backup más reciente
+LOG_FILE="${LOG_FILE:-/var/log/jenkins_maintenance.log}"
+MAX_BACKUPS="${MAX_BACKUPS:-1}"  # Mantener solo el backup más reciente
 
 ################################################################################
 # Funciones auxiliares
@@ -34,6 +34,17 @@ log_message() {
     shift
     local message="$@"
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    
+    # Asegurar que el directorio de log existe y es escribible
+    local log_dir=$(dirname "$LOG_FILE")
+    if [[ ! -d "$log_dir" ]]; then
+        mkdir -p "$log_dir" 2>/dev/null || LOG_FILE="/tmp/jenkins_maintenance.log"
+    fi
+    
+    if [[ ! -w "$log_dir" ]] && [[ ! -w "$LOG_FILE" ]]; then
+        LOG_FILE="/tmp/jenkins_maintenance.log"
+    fi
+    
     echo -e "${timestamp} [${level}] ${message}" | tee -a "$LOG_FILE"
 }
 
@@ -139,10 +150,12 @@ safe_jenkins_shutdown() {
 backup_jenkins_config() {
     log_info "=== Iniciando backup de configuraciones ==="
     
-    # Crear directorio de backup si no existe
+    # Crear directorio de backup si no existe con permisos seguros
     if [[ ! -d "$BACKUP_DIR" ]]; then
         log_info "Creando directorio de backup: $BACKUP_DIR"
         mkdir -p "$BACKUP_DIR"
+        chmod 700 "$BACKUP_DIR"
+        log_info "Permisos de backup configurados (700) para seguridad"
     fi
     
     # Nombre del backup con timestamp
@@ -165,16 +178,16 @@ backup_jenkins_config() {
         "hudson.model.UpdateCenter.xml"
     )
     
-    # Crear lista de archivos existentes
-    local backup_items=""
+    # Crear array de archivos existentes
+    local backup_items_array=()
     for item in "${items_to_backup[@]}"; do
         if [[ -e "${JENKINS_HOME}/${item}" ]]; then
-            backup_items="${backup_items} ${item}"
+            backup_items_array+=("$item")
         fi
     done
     
     # Crear backup
-    if tar -czf "$backup_file" -C "$JENKINS_HOME" $backup_items 2>&1 | tee -a "$LOG_FILE"; then
+    if tar -czf "$backup_file" -C "$JENKINS_HOME" "${backup_items_array[@]}" 2>&1 | tee -a "$LOG_FILE"; then
         log_success "Backup creado exitosamente: $backup_file"
         
         # Mostrar tamaño del backup
@@ -227,12 +240,16 @@ cleanup_temp_files() {
     
     local cleaned=0
     
-    # Limpiar workspace builds antiguos
-    if [[ -d "${JENKINS_HOME}/jobs" ]]; then
-        log_info "Limpiando workspaces antiguos..."
-        find "${JENKINS_HOME}/jobs" -type d -name "workspace" -exec du -sh {} \; 2>/dev/null | tee -a "$LOG_FILE"
-        # Descomentar la siguiente línea para eliminar workspaces (PRECAUCIÓN)
-        # find "${JENKINS_HOME}/jobs" -type d -name "workspace" -exec rm -rf {} \; 2>/dev/null
+    # Mostrar tamaño de workspaces (NO se eliminan por seguridad)
+    # ADVERTENCIA: Eliminar workspaces puede causar pérdida de código no comprometido
+    # y artefactos de build. Para habilitar, establezca CLEANUP_WORKSPACES=true
+    if [[ -d "${JENKINS_HOME}/jobs" ]] && [[ "${CLEANUP_WORKSPACES:-false}" == "true" ]]; then
+        log_warning "CLEANUP_WORKSPACES habilitado - Eliminando workspaces..."
+        find "${JENKINS_HOME}/jobs" -type d -name "workspace" -exec rm -rf {} \; 2>/dev/null
+        log_info "Workspaces eliminados"
+    elif [[ -d "${JENKINS_HOME}/jobs" ]]; then
+        log_info "Mostrando tamaño de workspaces (no se eliminarán):"
+        find "${JENKINS_HOME}/jobs" -type d -name "workspace" -exec du -sh {} \; 2>/dev/null | head -n 5 | tee -a "$LOG_FILE"
     fi
     
     # Limpiar archivos temporales
@@ -309,7 +326,13 @@ verify_jenkins() {
     
     # Verificar que el puerto esté escuchando (usualmente 8080)
     log_info "Verificando puertos en escucha..."
-    netstat -tlnp 2>/dev/null | grep java || ss -tlnp | grep java | tee -a "$LOG_FILE"
+    if command -v netstat &> /dev/null; then
+        netstat -tlnp 2>/dev/null | grep java | tee -a "$LOG_FILE"
+    elif command -v ss &> /dev/null; then
+        ss -tlnp | grep java | tee -a "$LOG_FILE"
+    else
+        log_warning "netstat y ss no disponibles, omitiendo verificación de puertos"
+    fi
     
     if systemctl is-active --quiet "$JENKINS_SERVICE"; then
         log_success "Jenkins está funcionando correctamente"
@@ -347,7 +370,13 @@ main() {
     
     # 3. Crear backup de configuraciones
     if ! backup_jenkins_config; then
-        log_error "Error al crear backup. Continuando con precaución..."
+        log_error "Error al crear backup."
+        if [[ "${SKIP_BACKUP_ON_ERROR:-false}" != "true" ]]; then
+            log_error "Abortando mantenimiento. Use SKIP_BACKUP_ON_ERROR=true para continuar sin backup."
+            exit 1
+        else
+            log_warning "SKIP_BACKUP_ON_ERROR habilitado, continuando sin backup..."
+        fi
     fi
     
     # 4. Gestionar backups (eliminar antiguos)
